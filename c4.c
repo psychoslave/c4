@@ -18,14 +18,18 @@ char *p, *lp, // current position in source code
 
 int *e, *le,  // current position in emitted code
     *id,      // currently parsed identifier
-    *sym,     // symbol table (simple list of identifiers)
-    tk,       // current token
-    ival,     // current token value
-    ty,       // current expression type
-    loc,      // local variable offset
+    /* list of lexemes, also known as symbol table, or list of identifiers */
+    *lexemes,
+    /* current lexie, that is, last string segmented as an atomic lexical chunck of code */
+    lexie,
+    /* current lexie value, state, or whatever name given to its pat gist */
+    nub,
+    /* type of the current expression */
+    ilk,
+    pad,      // local variable offset
     line,     // current line number
-    src,      // print source and assembly flag
-    debug;    // print executed instructions
+    pen,      // print source and assembly flag
+    spell;    // print executed instructions
 
 // tokens and classes (operators last and in precedence order)
 enum {
@@ -49,10 +53,10 @@ void next()
 {
   char *pp;
 
-  while (tk = *p) {
+  while (lexie = *p) {
     ++p;
-    if (tk == '\n') {
-      if (src) {
+    if (lexie == '\n') {
+      if (pen) {
         printf("%d: %.*s", line, p - lp, lp);
         lp = p;
         while (le < e) {
@@ -64,70 +68,70 @@ void next()
       }
       ++line;
     }
-    else if (tk == '#') {
+    else if (lexie == '#') {
       while (*p != 0 && *p != '\n') ++p;
     }
-    else if ((tk >= 'a' && tk <= 'z') || (tk >= 'A' && tk <= 'Z') || tk == '_') {
+    else if ((lexie >= 'a' && lexie <= 'z') || (lexie >= 'A' && lexie <= 'Z') || lexie == '_') {
       pp = p - 1;
       while ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9') || *p == '_')
-        tk = tk * 147 + *p++;
-      tk = (tk << 6) + (p - pp);
-      id = sym;
+        lexie = lexie * 147 + *p++;
+      lexie = (lexie << 6) + (p - pp);
+      id = lexemes;
       while (id[Tk]) {
-        if (tk == id[Hash] && !memcmp((char *)id[Name], pp, p - pp)) { tk = id[Tk]; return; }
+        if (lexie == id[Hash] && !memcmp((char *)id[Name], pp, p - pp)) { lexie = id[Tk]; return; }
         id = id + Idsz;
       }
       id[Name] = (int)pp;
-      id[Hash] = tk;
-      tk = id[Tk] = Id;
+      id[Hash] = lexie;
+      lexie = id[Tk] = Id;
       return;
     }
-    else if (tk >= '0' && tk <= '9') {
-      if (ival = tk - '0') { while (*p >= '0' && *p <= '9') ival = ival * 10 + *p++ - '0'; }
+    else if (lexie >= '0' && lexie <= '9') {
+      if (nub = lexie - '0') { while (*p >= '0' && *p <= '9') nub = nub * 10 + *p++ - '0'; }
       else if (*p == 'x' || *p == 'X') {
-        while ((tk = *++p) && ((tk >= '0' && tk <= '9') || (tk >= 'a' && tk <= 'f') || (tk >= 'A' && tk <= 'F')))
-          ival = ival * 16 + (tk & 15) + (tk >= 'A' ? 9 : 0);
+        while ((lexie = *++p) && ((lexie >= '0' && lexie <= '9') || (lexie >= 'a' && lexie <= 'f') || (lexie >= 'A' && lexie <= 'F')))
+          nub = nub * 16 + (lexie & 15) + (lexie >= 'A' ? 9 : 0);
       }
-      else { while (*p >= '0' && *p <= '7') ival = ival * 8 + *p++ - '0'; }
-      tk = Num;
+      else { while (*p >= '0' && *p <= '7') nub = nub * 8 + *p++ - '0'; }
+      lexie = Num;
       return;
     }
-    else if (tk == '/') {
+    else if (lexie == '/') {
       if (*p == '/') {
         ++p;
         while (*p != 0 && *p != '\n') ++p;
       }
       else {
-        tk = Div;
+        lexie = Div;
         return;
       }
     }
-    else if (tk == '\'' || tk == '"') {
+    else if (lexie == '\'' || lexie == '"') {
       pp = data;
-      while (*p != 0 && *p != tk) {
-        if ((ival = *p++) == '\\') {
-          if ((ival = *p++) == 'n') ival = '\n';
+      while (*p != 0 && *p != lexie) {
+        if ((nub = *p++) == '\\') {
+          if ((nub = *p++) == 'n') nub = '\n';
         }
-        if (tk == '"') *data++ = ival;
+        if (lexie == '"') *data++ = nub;
       }
       ++p;
-      if (tk == '"') ival = (int)pp; else tk = Num;
+      if (lexie == '"') nub = (int)pp; else lexie = Num;
       return;
     }
-    else if (tk == '=') { if (*p == '=') { ++p; tk = Eq; } else tk = Assign; return; }
-    else if (tk == '+') { if (*p == '+') { ++p; tk = Inc; } else tk = Add; return; }
-    else if (tk == '-') { if (*p == '-') { ++p; tk = Dec; } else tk = Sub; return; }
-    else if (tk == '!') { if (*p == '=') { ++p; tk = Ne; } return; }
-    else if (tk == '<') { if (*p == '=') { ++p; tk = Le; } else if (*p == '<') { ++p; tk = Shl; } else tk = Lt; return; }
-    else if (tk == '>') { if (*p == '=') { ++p; tk = Ge; } else if (*p == '>') { ++p; tk = Shr; } else tk = Gt; return; }
-    else if (tk == '|') { if (*p == '|') { ++p; tk = Lor; } else tk = Or; return; }
-    else if (tk == '&') { if (*p == '&') { ++p; tk = Lan; } else tk = And; return; }
-    else if (tk == '^') { tk = Xor; return; }
-    else if (tk == '%') { tk = Mod; return; }
-    else if (tk == '*') { tk = Mul; return; }
-    else if (tk == '[') { tk = Brak; return; }
-    else if (tk == '?') { tk = Cond; return; }
-    else if (tk == '~' || tk == ';' || tk == '{' || tk == '}' || tk == '(' || tk == ')' || tk == ']' || tk == ',' || tk == ':') return;
+    else if (lexie == '=') { if (*p == '=') { ++p; lexie = Eq; } else lexie = Assign; return; }
+    else if (lexie == '+') { if (*p == '+') { ++p; lexie = Inc; } else lexie = Add; return; }
+    else if (lexie == '-') { if (*p == '-') { ++p; lexie = Dec; } else lexie = Sub; return; }
+    else if (lexie == '!') { if (*p == '=') { ++p; lexie = Ne; } return; }
+    else if (lexie == '<') { if (*p == '=') { ++p; lexie = Le; } else if (*p == '<') { ++p; lexie = Shl; } else lexie = Lt; return; }
+    else if (lexie == '>') { if (*p == '=') { ++p; lexie = Ge; } else if (*p == '>') { ++p; lexie = Shr; } else lexie = Gt; return; }
+    else if (lexie == '|') { if (*p == '|') { ++p; lexie = Lor; } else lexie = Or; return; }
+    else if (lexie == '&') { if (*p == '&') { ++p; lexie = Lan; } else lexie = And; return; }
+    else if (lexie == '^') { lexie = Xor; return; }
+    else if (lexie == '%') { lexie = Mod; return; }
+    else if (lexie == '*') { lexie = Mul; return; }
+    else if (lexie == '[') { lexie = Brak; return; }
+    else if (lexie == '?') { lexie = Cond; return; }
+    else if (lexie == '~' || lexie == ';' || lexie == '{' || lexie == '}' || lexie == '(' || lexie == ')' || lexie == ']' || lexie == ',' || lexie == ':') return;
   }
 }
 
@@ -135,149 +139,149 @@ void expr(int lev)
 {
   int t, *d;
 
-  if (!tk) { printf("%d: unexpected eof in expression\n", line); exit(-1); }
-  else if (tk == Num) { *++e = IMM; *++e = ival; next(); ty = INT; }
-  else if (tk == '"') {
-    *++e = IMM; *++e = ival; next();
-    while (tk == '"') next();
-    data = (char *)((int)data + sizeof(int) & -sizeof(int)); ty = PTR;
+  if (!lexie) { printf("%d: unexpected eof in expression\n", line); exit(-1); }
+  else if (lexie == Num) { *++e = IMM; *++e = nub; next(); ilk = INT; }
+  else if (lexie == '"') {
+    *++e = IMM; *++e = nub; next();
+    while (lexie == '"') next();
+    data = (char *)((int)data + sizeof(int) & -sizeof(int)); ilk = PTR;
   }
-  else if (tk == Sizeof) {
-    next(); if (tk == '(') next(); else { printf("%d: open paren expected in sizeof\n", line); exit(-1); }
-    ty = INT; if (tk == Int) next(); else if (tk == Char) { next(); ty = CHAR; }
-    while (tk == Mul) { next(); ty = ty + PTR; }
-    if (tk == ')') next(); else { printf("%d: close paren expected in sizeof\n", line); exit(-1); }
-    *++e = IMM; *++e = (ty == CHAR) ? sizeof(char) : sizeof(int);
-    ty = INT;
+  else if (lexie == Sizeof) {
+    next(); if (lexie == '(') next(); else { printf("%d: open paren expected in sizeof\n", line); exit(-1); }
+    ilk = INT; if (lexie == Int) next(); else if (lexie == Char) { next(); ilk = CHAR; }
+    while (lexie == Mul) { next(); ilk = ilk + PTR; }
+    if (lexie == ')') next(); else { printf("%d: close paren expected in sizeof\n", line); exit(-1); }
+    *++e = IMM; *++e = (ilk == CHAR) ? sizeof(char) : sizeof(int);
+    ilk = INT;
   }
-  else if (tk == Id) {
+  else if (lexie == Id) {
     d = id; next();
-    if (tk == '(') {
+    if (lexie == '(') {
       next();
       t = 0;
-      while (tk != ')') { expr(Assign); *++e = PSH; ++t; if (tk == ',') next(); }
+      while (lexie != ')') { expr(Assign); *++e = PSH; ++t; if (lexie == ',') next(); }
       next();
       if (d[Class] == Sys) *++e = d[Val];
       else if (d[Class] == Fun) { *++e = JSR; *++e = d[Val]; }
       else { printf("%d: bad function call\n", line); exit(-1); }
       if (t) { *++e = ADJ; *++e = t; }
-      ty = d[Type];
+      ilk = d[Type];
     }
-    else if (d[Class] == Num) { *++e = IMM; *++e = d[Val]; ty = INT; }
+    else if (d[Class] == Num) { *++e = IMM; *++e = d[Val]; ilk = INT; }
     else {
-      if (d[Class] == Loc) { *++e = LEA; *++e = loc - d[Val]; }
+      if (d[Class] == Loc) { *++e = LEA; *++e = pad - d[Val]; }
       else if (d[Class] == Glo) { *++e = IMM; *++e = d[Val]; }
       else { printf("%d: undefined variable\n", line); exit(-1); }
-      *++e = ((ty = d[Type]) == CHAR) ? LC : LI;
+      *++e = ((ilk = d[Type]) == CHAR) ? LC : LI;
     }
   }
-  else if (tk == '(') {
+  else if (lexie == '(') {
     next();
-    if (tk == Int || tk == Char) {
-      t = (tk == Int) ? INT : CHAR; next();
-      while (tk == Mul) { next(); t = t + PTR; }
-      if (tk == ')') next(); else { printf("%d: bad cast\n", line); exit(-1); }
+    if (lexie == Int || lexie == Char) {
+      t = (lexie == Int) ? INT : CHAR; next();
+      while (lexie == Mul) { next(); t = t + PTR; }
+      if (lexie == ')') next(); else { printf("%d: bad cast\n", line); exit(-1); }
       expr(Inc);
-      ty = t;
+      ilk = t;
     }
     else {
       expr(Assign);
-      if (tk == ')') next(); else { printf("%d: close paren expected\n", line); exit(-1); }
+      if (lexie == ')') next(); else { printf("%d: close paren expected\n", line); exit(-1); }
     }
   }
-  else if (tk == Mul) {
+  else if (lexie == Mul) {
     next(); expr(Inc);
-    if (ty > INT) ty = ty - PTR; else { printf("%d: bad dereference\n", line); exit(-1); }
-    *++e = (ty == CHAR) ? LC : LI;
+    if (ilk > INT) ilk = ilk - PTR; else { printf("%d: bad dereference\n", line); exit(-1); }
+    *++e = (ilk == CHAR) ? LC : LI;
   }
-  else if (tk == And) {
+  else if (lexie == And) {
     next(); expr(Inc);
     if (*e == LC || *e == LI) --e; else { printf("%d: bad address-of\n", line); exit(-1); }
-    ty = ty + PTR;
+    ilk = ilk + PTR;
   }
-  else if (tk == '!') { next(); expr(Inc); *++e = PSH; *++e = IMM; *++e = 0; *++e = EQ; ty = INT; }
-  else if (tk == '~') { next(); expr(Inc); *++e = PSH; *++e = IMM; *++e = -1; *++e = XOR; ty = INT; }
-  else if (tk == Add) { next(); expr(Inc); ty = INT; }
-  else if (tk == Sub) {
+  else if (lexie == '!') { next(); expr(Inc); *++e = PSH; *++e = IMM; *++e = 0; *++e = EQ; ilk = INT; }
+  else if (lexie == '~') { next(); expr(Inc); *++e = PSH; *++e = IMM; *++e = -1; *++e = XOR; ilk = INT; }
+  else if (lexie == Add) { next(); expr(Inc); ilk = INT; }
+  else if (lexie == Sub) {
     next(); *++e = IMM;
-    if (tk == Num) { *++e = -ival; next(); } else { *++e = -1; *++e = PSH; expr(Inc); *++e = MUL; }
-    ty = INT;
+    if (lexie == Num) { *++e = -nub; next(); } else { *++e = -1; *++e = PSH; expr(Inc); *++e = MUL; }
+    ilk = INT;
   }
-  else if (tk == Inc || tk == Dec) {
-    t = tk; next(); expr(Inc);
+  else if (lexie == Inc || lexie == Dec) {
+    t = lexie; next(); expr(Inc);
     if (*e == LC) { *e = PSH; *++e = LC; }
     else if (*e == LI) { *e = PSH; *++e = LI; }
     else { printf("%d: bad lvalue in pre-increment\n", line); exit(-1); }
     *++e = PSH;
-    *++e = IMM; *++e = (ty > PTR) ? sizeof(int) : sizeof(char);
+    *++e = IMM; *++e = (ilk > PTR) ? sizeof(int) : sizeof(char);
     *++e = (t == Inc) ? ADD : SUB;
-    *++e = (ty == CHAR) ? SC : SI;
+    *++e = (ilk == CHAR) ? SC : SI;
   }
   else { printf("%d: bad expression\n", line); exit(-1); }
 
-  while (tk >= lev) { // "precedence climbing" or "Top Down Operator Precedence" method
-    t = ty;
-    if (tk == Assign) {
+  while (lexie >= lev) { // "precedence climbing" or "Top Down Operator Precedence" method
+    t = ilk;
+    if (lexie == Assign) {
       next();
       if (*e == LC || *e == LI) *e = PSH; else { printf("%d: bad lvalue in assignment\n", line); exit(-1); }
-      expr(Assign); *++e = ((ty = t) == CHAR) ? SC : SI;
+      expr(Assign); *++e = ((ilk = t) == CHAR) ? SC : SI;
     }
-    else if (tk == Cond) {
+    else if (lexie == Cond) {
       next();
       *++e = BZ; d = ++e;
       expr(Assign);
-      if (tk == ':') next(); else { printf("%d: conditional missing colon\n", line); exit(-1); }
+      if (lexie == ':') next(); else { printf("%d: conditional missing colon\n", line); exit(-1); }
       *d = (int)(e + 3); *++e = JMP; d = ++e;
       expr(Cond);
       *d = (int)(e + 1);
     }
-    else if (tk == Lor) { next(); *++e = BNZ; d = ++e; expr(Lan); *d = (int)(e + 1); ty = INT; }
-    else if (tk == Lan) { next(); *++e = BZ;  d = ++e; expr(Or);  *d = (int)(e + 1); ty = INT; }
-    else if (tk == Or)  { next(); *++e = PSH; expr(Xor); *++e = OR;  ty = INT; }
-    else if (tk == Xor) { next(); *++e = PSH; expr(And); *++e = XOR; ty = INT; }
-    else if (tk == And) { next(); *++e = PSH; expr(Eq);  *++e = AND; ty = INT; }
-    else if (tk == Eq)  { next(); *++e = PSH; expr(Lt);  *++e = EQ;  ty = INT; }
-    else if (tk == Ne)  { next(); *++e = PSH; expr(Lt);  *++e = NE;  ty = INT; }
-    else if (tk == Lt)  { next(); *++e = PSH; expr(Shl); *++e = LT;  ty = INT; }
-    else if (tk == Gt)  { next(); *++e = PSH; expr(Shl); *++e = GT;  ty = INT; }
-    else if (tk == Le)  { next(); *++e = PSH; expr(Shl); *++e = LE;  ty = INT; }
-    else if (tk == Ge)  { next(); *++e = PSH; expr(Shl); *++e = GE;  ty = INT; }
-    else if (tk == Shl) { next(); *++e = PSH; expr(Add); *++e = SHL; ty = INT; }
-    else if (tk == Shr) { next(); *++e = PSH; expr(Add); *++e = SHR; ty = INT; }
-    else if (tk == Add) {
+    else if (lexie == Lor) { next(); *++e = BNZ; d = ++e; expr(Lan); *d = (int)(e + 1); ilk = INT; }
+    else if (lexie == Lan) { next(); *++e = BZ;  d = ++e; expr(Or);  *d = (int)(e + 1); ilk = INT; }
+    else if (lexie == Or)  { next(); *++e = PSH; expr(Xor); *++e = OR;  ilk = INT; }
+    else if (lexie == Xor) { next(); *++e = PSH; expr(And); *++e = XOR; ilk = INT; }
+    else if (lexie == And) { next(); *++e = PSH; expr(Eq);  *++e = AND; ilk = INT; }
+    else if (lexie == Eq)  { next(); *++e = PSH; expr(Lt);  *++e = EQ;  ilk = INT; }
+    else if (lexie == Ne)  { next(); *++e = PSH; expr(Lt);  *++e = NE;  ilk = INT; }
+    else if (lexie == Lt)  { next(); *++e = PSH; expr(Shl); *++e = LT;  ilk = INT; }
+    else if (lexie == Gt)  { next(); *++e = PSH; expr(Shl); *++e = GT;  ilk = INT; }
+    else if (lexie == Le)  { next(); *++e = PSH; expr(Shl); *++e = LE;  ilk = INT; }
+    else if (lexie == Ge)  { next(); *++e = PSH; expr(Shl); *++e = GE;  ilk = INT; }
+    else if (lexie == Shl) { next(); *++e = PSH; expr(Add); *++e = SHL; ilk = INT; }
+    else if (lexie == Shr) { next(); *++e = PSH; expr(Add); *++e = SHR; ilk = INT; }
+    else if (lexie == Add) {
       next(); *++e = PSH; expr(Mul);
-      if ((ty = t) > PTR) { *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = MUL;  }
+      if ((ilk = t) > PTR) { *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = MUL;  }
       *++e = ADD;
     }
-    else if (tk == Sub) {
+    else if (lexie == Sub) {
       next(); *++e = PSH; expr(Mul);
-      if (t > PTR && t == ty) { *++e = SUB; *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = DIV; ty = INT; }
-      else if ((ty = t) > PTR) { *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = MUL; *++e = SUB; }
+      if (t > PTR && t == ilk) { *++e = SUB; *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = DIV; ilk = INT; }
+      else if ((ilk = t) > PTR) { *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = MUL; *++e = SUB; }
       else *++e = SUB;
     }
-    else if (tk == Mul) { next(); *++e = PSH; expr(Inc); *++e = MUL; ty = INT; }
-    else if (tk == Div) { next(); *++e = PSH; expr(Inc); *++e = DIV; ty = INT; }
-    else if (tk == Mod) { next(); *++e = PSH; expr(Inc); *++e = MOD; ty = INT; }
-    else if (tk == Inc || tk == Dec) {
+    else if (lexie == Mul) { next(); *++e = PSH; expr(Inc); *++e = MUL; ilk = INT; }
+    else if (lexie == Div) { next(); *++e = PSH; expr(Inc); *++e = DIV; ilk = INT; }
+    else if (lexie == Mod) { next(); *++e = PSH; expr(Inc); *++e = MOD; ilk = INT; }
+    else if (lexie == Inc || lexie == Dec) {
       if (*e == LC) { *e = PSH; *++e = LC; }
       else if (*e == LI) { *e = PSH; *++e = LI; }
       else { printf("%d: bad lvalue in post-increment\n", line); exit(-1); }
-      *++e = PSH; *++e = IMM; *++e = (ty > PTR) ? sizeof(int) : sizeof(char);
-      *++e = (tk == Inc) ? ADD : SUB;
-      *++e = (ty == CHAR) ? SC : SI;
-      *++e = PSH; *++e = IMM; *++e = (ty > PTR) ? sizeof(int) : sizeof(char);
-      *++e = (tk == Inc) ? SUB : ADD;
+      *++e = PSH; *++e = IMM; *++e = (ilk > PTR) ? sizeof(int) : sizeof(char);
+      *++e = (lexie == Inc) ? ADD : SUB;
+      *++e = (ilk == CHAR) ? SC : SI;
+      *++e = PSH; *++e = IMM; *++e = (ilk > PTR) ? sizeof(int) : sizeof(char);
+      *++e = (lexie == Inc) ? SUB : ADD;
       next();
     }
-    else if (tk == Brak) {
+    else if (lexie == Brak) {
       next(); *++e = PSH; expr(Assign);
-      if (tk == ']') next(); else { printf("%d: close bracket expected\n", line); exit(-1); }
+      if (lexie == ']') next(); else { printf("%d: close bracket expected\n", line); exit(-1); }
       if (t > PTR) { *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = MUL;  }
       else if (t < PTR) { printf("%d: pointer type expected\n", line); exit(-1); }
       *++e = ADD;
-      *++e = ((ty = t - PTR) == CHAR) ? LC : LI;
+      *++e = ((ilk = t - PTR) == CHAR) ? LC : LI;
     }
-    else { printf("%d: compiler error tk=%d\n", line, tk); exit(-1); }
+    else { printf("%d: compiler error lexie=%d\n", line, lexie); exit(-1); }
   }
 }
 
@@ -285,71 +289,71 @@ void stmt()
 {
   int *a, *b;
 
-  if (tk == If) {
+  if (lexie == If) {
     next();
-    if (tk == '(') next(); else { printf("%d: open paren expected\n", line); exit(-1); }
+    if (lexie == '(') next(); else { printf("%d: open paren expected\n", line); exit(-1); }
     expr(Assign);
-    if (tk == ')') next(); else { printf("%d: close paren expected\n", line); exit(-1); }
+    if (lexie == ')') next(); else { printf("%d: close paren expected\n", line); exit(-1); }
     *++e = BZ; b = ++e;
     stmt();
-    if (tk == Else) {
+    if (lexie == Else) {
       *b = (int)(e + 3); *++e = JMP; b = ++e;
       next();
       stmt();
     }
     *b = (int)(e + 1);
   }
-  else if (tk == While) {
+  else if (lexie == While) {
     next();
     a = e + 1;
-    if (tk == '(') next(); else { printf("%d: open paren expected\n", line); exit(-1); }
+    if (lexie == '(') next(); else { printf("%d: open paren expected\n", line); exit(-1); }
     expr(Assign);
-    if (tk == ')') next(); else { printf("%d: close paren expected\n", line); exit(-1); }
+    if (lexie == ')') next(); else { printf("%d: close paren expected\n", line); exit(-1); }
     *++e = BZ; b = ++e;
     stmt();
     *++e = JMP; *++e = (int)a;
     *b = (int)(e + 1);
   }
-  else if (tk == Return) {
+  else if (lexie == Return) {
     next();
-    if (tk != ';') expr(Assign);
+    if (lexie != ';') expr(Assign);
     *++e = LEV;
-    if (tk == ';') next(); else { printf("%d: semicolon expected\n", line); exit(-1); }
+    if (lexie == ';') next(); else { printf("%d: semicolon expected\n", line); exit(-1); }
   }
-  else if (tk == '{') {
+  else if (lexie == '{') {
     next();
-    while (tk != '}') stmt();
+    while (lexie != '}') stmt();
     next();
   }
-  else if (tk == ';') {
+  else if (lexie == ';') {
     next();
   }
   else {
     expr(Assign);
-    if (tk == ';') next(); else { printf("%d: semicolon expected\n", line); exit(-1); }
+    if (lexie == ';') next(); else { printf("%d: semicolon expected\n", line); exit(-1); }
   }
 }
 
 int main(int argc, char **argv)
 {
-  int fd, bt, ty, poolsz, *idmain;
+  int fd, bt, ilk, poolsz, *idmain;
   int *pc, *sp, *bp, a, cycle; // vm registers
   int i, *t; // temps
 
   --argc; ++argv;
-  if (argc > 0 && **argv == '-' && (*argv)[1] == 's') { src = 1; --argc; ++argv; }
-  if (argc > 0 && **argv == '-' && (*argv)[1] == 'd') { debug = 1; --argc; ++argv; }
+  if (argc > 0 && **argv == '-' && (*argv)[1] == 's') { pen = 1; --argc; ++argv; }
+  if (argc > 0 && **argv == '-' && (*argv)[1] == 'd') { spell = 1; --argc; ++argv; }
   if (argc < 1) { printf("usage: c4 [-s] [-d] file ...\n"); return -1; }
 
   if ((fd = open(*argv, 0)) < 0) { printf("could not open(%s)\n", *argv); return -1; }
 
   poolsz = 256*1024; // arbitrary size
-  if (!(sym = malloc(poolsz))) { printf("could not malloc(%d) symbol area\n", poolsz); return -1; }
+  if (!(lexemes = malloc(poolsz))) { printf("could not malloc(%d) symbol area\n", poolsz); return -1; }
   if (!(le = e = malloc(poolsz))) { printf("could not malloc(%d) text area\n", poolsz); return -1; }
   if (!(data = malloc(poolsz))) { printf("could not malloc(%d) data area\n", poolsz); return -1; }
   if (!(sp = malloc(poolsz))) { printf("could not malloc(%d) stack area\n", poolsz); return -1; }
 
-  memset(sym,  0, poolsz);
+  memset(lexemes,  0, poolsz);
   memset(e,    0, poolsz);
   memset(data, 0, poolsz);
 
@@ -368,79 +372,79 @@ int main(int argc, char **argv)
   // parse declarations
   line = 1;
   next();
-  while (tk) {
+  while (lexie) {
     bt = INT; // basetype
-    if (tk == Int) next();
-    else if (tk == Char) { next(); bt = CHAR; }
-    else if (tk == Enum) {
+    if (lexie == Int) next();
+    else if (lexie == Char) { next(); bt = CHAR; }
+    else if (lexie == Enum) {
       next();
-      if (tk != '{') next();
-      if (tk == '{') {
+      if (lexie != '{') next();
+      if (lexie == '{') {
         next();
         i = 0;
-        while (tk != '}') {
-          if (tk != Id) { printf("%d: bad enum identifier %d\n", line, tk); return -1; }
+        while (lexie != '}') {
+          if (lexie != Id) { printf("%d: bad enum identifier %d\n", line, lexie); return -1; }
           next();
-          if (tk == Assign) {
+          if (lexie == Assign) {
             next();
-            if (tk != Num) { printf("%d: bad enum initializer\n", line); return -1; }
-            i = ival;
+            if (lexie != Num) { printf("%d: bad enum initializer\n", line); return -1; }
+            i = nub;
             next();
           }
           id[Class] = Num; id[Type] = INT; id[Val] = i++;
-          if (tk == ',') next();
+          if (lexie == ',') next();
         }
         next();
       }
     }
-    while (tk != ';' && tk != '}') {
-      ty = bt;
-      while (tk == Mul) { next(); ty = ty + PTR; }
-      if (tk != Id) { printf("%d: bad global declaration\n", line); return -1; }
+    while (lexie != ';' && lexie != '}') {
+      ilk = bt;
+      while (lexie == Mul) { next(); ilk = ilk + PTR; }
+      if (lexie != Id) { printf("%d: bad global declaration\n", line); return -1; }
       if (id[Class]) { printf("%d: duplicate global definition\n", line); return -1; }
       next();
-      id[Type] = ty;
-      if (tk == '(') { // function
+      id[Type] = ilk;
+      if (lexie == '(') { // function
         id[Class] = Fun;
         id[Val] = (int)(e + 1);
         next(); i = 0;
-        while (tk != ')') {
-          ty = INT;
-          if (tk == Int) next();
-          else if (tk == Char) { next(); ty = CHAR; }
-          while (tk == Mul) { next(); ty = ty + PTR; }
-          if (tk != Id) { printf("%d: bad parameter declaration\n", line); return -1; }
+        while (lexie != ')') {
+          ilk = INT;
+          if (lexie == Int) next();
+          else if (lexie == Char) { next(); ilk = CHAR; }
+          while (lexie == Mul) { next(); ilk = ilk + PTR; }
+          if (lexie != Id) { printf("%d: bad parameter declaration\n", line); return -1; }
           if (id[Class] == Loc) { printf("%d: duplicate parameter definition\n", line); return -1; }
           id[HClass] = id[Class]; id[Class] = Loc;
-          id[HType]  = id[Type];  id[Type] = ty;
+          id[HType]  = id[Type];  id[Type] = ilk;
           id[HVal]   = id[Val];   id[Val] = i++;
           next();
-          if (tk == ',') next();
+          if (lexie == ',') next();
         }
         next();
-        if (tk != '{') { printf("%d: bad function definition\n", line); return -1; }
-        loc = ++i;
+        if (lexie != '{') { printf("%d: bad function definition\n", line); return -1; }
+        pad = ++i;
         next();
-        while (tk == Int || tk == Char) {
-          bt = (tk == Int) ? INT : CHAR;
+        while (lexie == Int || lexie == Char) {
+          bt = (lexie == Int) ? INT : CHAR;
           next();
-          while (tk != ';') {
-            ty = bt;
-            while (tk == Mul) { next(); ty = ty + PTR; }
-            if (tk != Id) { printf("%d: bad local declaration\n", line); return -1; }
+          while (lexie != ';') {
+            ilk = bt;
+            while (lexie == Mul) { next(); ilk = ilk + PTR; }
+            if (lexie != Id) { printf("%d: bad local declaration\n", line); return -1; }
             if (id[Class] == Loc) { printf("%d: duplicate local definition\n", line); return -1; }
             id[HClass] = id[Class]; id[Class] = Loc;
-            id[HType]  = id[Type];  id[Type] = ty;
+            id[HType]  = id[Type];  id[Type] = ilk;
             id[HVal]   = id[Val];   id[Val] = ++i;
             next();
-            if (tk == ',') next();
+            if (lexie == ',') next();
           }
           next();
         }
-        *++e = ENT; *++e = i - loc;
-        while (tk != '}') stmt();
+        *++e = ENT; *++e = i - pad;
+        while (lexie != '}') stmt();
         *++e = LEV;
-        id = sym; // unwind symbol table locals
+        id = lexemes; // unwind symbol table locals
         while (id[Tk]) {
           if (id[Class] == Loc) {
             id[Class] = id[HClass];
@@ -455,13 +459,13 @@ int main(int argc, char **argv)
         id[Val] = (int)data;
         data = data + sizeof(int);
       }
-      if (tk == ',') next();
+      if (lexie == ',') next();
     }
     next();
   }
 
   if (!(pc = (int *)idmain[Val])) { printf("main() not defined\n"); return -1; }
-  if (src) return 0;
+  if (pen) return 0;
 
   // setup stack
   bp = sp = (int *)((int)sp + poolsz);
@@ -475,7 +479,7 @@ int main(int argc, char **argv)
   cycle = 0;
   while (1) {
     i = *pc++; ++cycle;
-    if (debug) {
+    if (spell) {
       printf("%d> %.4s", cycle,
         &"LEA ,IMM ,JMP ,JSR ,BZ  ,BNZ ,ENT ,ADJ ,LEV ,LI  ,LC  ,SI  ,SC  ,PSH ,"
          "OR  ,XOR ,AND ,EQ  ,NE  ,LT  ,GT  ,LE  ,GE  ,SHL ,SHR ,ADD ,SUB ,MUL ,DIV ,MOD ,"
