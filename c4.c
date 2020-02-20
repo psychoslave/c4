@@ -149,7 +149,7 @@ void next()
 /**
  * Parses expressions
  */
-void expr(int lev)
+void expression(int lev)
 {
   int t, *d;
 
@@ -173,7 +173,7 @@ void expr(int lev)
     if (lexie == '(') {
       next();
       t = 0;
-      while (lexie != ')') { expr(Assign); *++e = PSH; ++t; if (lexie == ',') next(); }
+      while (lexie != ')') { expression(Assign); *++e = PSH; ++t; if (lexie == ',') next(); }
       next();
       if (d[Class] == Sys) *++e = d[Val];
       else if (d[Class] == Fun) { *++e = JSR; *++e = d[Val]; }
@@ -195,34 +195,34 @@ void expr(int lev)
       t = (lexie == Int) ? INT : CHAR; next();
       while (lexie == Mul) { next(); t = t + PTR; }
       if (lexie == ')') next(); else { printf("%d: bad cast\n", line); exit(-1); }
-      expr(Inc);
+      expression(Inc);
       ilk = t;
     }
     else {
-      expr(Assign);
+      expression(Assign);
       if (lexie == ')') next(); else { printf("%d: close paren expected\n", line); exit(-1); }
     }
   }
   else if (lexie == Mul) {
-    next(); expr(Inc);
+    next(); expression(Inc);
     if (ilk > INT) ilk = ilk - PTR; else { printf("%d: bad dereference\n", line); exit(-1); }
     *++e = (ilk == CHAR) ? LC : LI;
   }
   else if (lexie == And) {
-    next(); expr(Inc);
+    next(); expression(Inc);
     if (*e == LC || *e == LI) --e; else { printf("%d: bad address-of\n", line); exit(-1); }
     ilk = ilk + PTR;
   }
-  else if (lexie == '!') { next(); expr(Inc); *++e = PSH; *++e = IMM; *++e = 0; *++e = EQ; ilk = INT; }
-  else if (lexie == '~') { next(); expr(Inc); *++e = PSH; *++e = IMM; *++e = -1; *++e = XOR; ilk = INT; }
-  else if (lexie == Add) { next(); expr(Inc); ilk = INT; }
+  else if (lexie == '!') { next(); expression(Inc); *++e = PSH; *++e = IMM; *++e = 0; *++e = EQ; ilk = INT; }
+  else if (lexie == '~') { next(); expression(Inc); *++e = PSH; *++e = IMM; *++e = -1; *++e = XOR; ilk = INT; }
+  else if (lexie == Add) { next(); expression(Inc); ilk = INT; }
   else if (lexie == Sub) {
     next(); *++e = IMM;
-    if (lexie == Num) { *++e = -nub; next(); } else { *++e = -1; *++e = PSH; expr(Inc); *++e = MUL; }
+    if (lexie == Num) { *++e = -nub; next(); } else { *++e = -1; *++e = PSH; expression(Inc); *++e = MUL; }
     ilk = INT;
   }
   else if (lexie == Inc || lexie == Dec) {
-    t = lexie; next(); expr(Inc);
+    t = lexie; next(); expression(Inc);
     if (*e == LC) { *e = PSH; *++e = LC; }
     else if (*e == LI) { *e = PSH; *++e = LI; }
     else { printf("%d: bad lvalue in pre-increment\n", line); exit(-1); }
@@ -238,44 +238,44 @@ void expr(int lev)
     if (lexie == Assign) {
       next();
       if (*e == LC || *e == LI) *e = PSH; else { printf("%d: bad lvalue in assignment\n", line); exit(-1); }
-      expr(Assign); *++e = ((ilk = t) == CHAR) ? SC : SI;
+      expression(Assign); *++e = ((ilk = t) == CHAR) ? SC : SI;
     }
     else if (lexie == Cond) {
       next();
       *++e = BZ; d = ++e;
-      expr(Assign);
+      expression(Assign);
       if (lexie == ':') next(); else { printf("%d: conditional missing colon\n", line); exit(-1); }
       *d = (int)(e + 3); *++e = JMP; d = ++e;
-      expr(Cond);
+      expression(Cond);
       *d = (int)(e + 1);
     }
-    else if (lexie == Lor) { next(); *++e = BNZ; d = ++e; expr(Lan); *d = (int)(e + 1); ilk = INT; }
-    else if (lexie == Lan) { next(); *++e = BZ;  d = ++e; expr(Or);  *d = (int)(e + 1); ilk = INT; }
-    else if (lexie == Or)  { next(); *++e = PSH; expr(Xor); *++e = OR;  ilk = INT; }
-    else if (lexie == Xor) { next(); *++e = PSH; expr(And); *++e = XOR; ilk = INT; }
-    else if (lexie == And) { next(); *++e = PSH; expr(Eq);  *++e = AND; ilk = INT; }
-    else if (lexie == Eq)  { next(); *++e = PSH; expr(Lt);  *++e = EQ;  ilk = INT; }
-    else if (lexie == Ne)  { next(); *++e = PSH; expr(Lt);  *++e = NE;  ilk = INT; }
-    else if (lexie == Lt)  { next(); *++e = PSH; expr(Shl); *++e = LT;  ilk = INT; }
-    else if (lexie == Gt)  { next(); *++e = PSH; expr(Shl); *++e = GT;  ilk = INT; }
-    else if (lexie == Le)  { next(); *++e = PSH; expr(Shl); *++e = LE;  ilk = INT; }
-    else if (lexie == Ge)  { next(); *++e = PSH; expr(Shl); *++e = GE;  ilk = INT; }
-    else if (lexie == Shl) { next(); *++e = PSH; expr(Add); *++e = SHL; ilk = INT; }
-    else if (lexie == Shr) { next(); *++e = PSH; expr(Add); *++e = SHR; ilk = INT; }
+    else if (lexie == Lor) { next(); *++e = BNZ; d = ++e; expression(Lan); *d = (int)(e + 1); ilk = INT; }
+    else if (lexie == Lan) { next(); *++e = BZ;  d = ++e; expression(Or);  *d = (int)(e + 1); ilk = INT; }
+    else if (lexie == Or)  { next(); *++e = PSH; expression(Xor); *++e = OR;  ilk = INT; }
+    else if (lexie == Xor) { next(); *++e = PSH; expression(And); *++e = XOR; ilk = INT; }
+    else if (lexie == And) { next(); *++e = PSH; expression(Eq);  *++e = AND; ilk = INT; }
+    else if (lexie == Eq)  { next(); *++e = PSH; expression(Lt);  *++e = EQ;  ilk = INT; }
+    else if (lexie == Ne)  { next(); *++e = PSH; expression(Lt);  *++e = NE;  ilk = INT; }
+    else if (lexie == Lt)  { next(); *++e = PSH; expression(Shl); *++e = LT;  ilk = INT; }
+    else if (lexie == Gt)  { next(); *++e = PSH; expression(Shl); *++e = GT;  ilk = INT; }
+    else if (lexie == Le)  { next(); *++e = PSH; expression(Shl); *++e = LE;  ilk = INT; }
+    else if (lexie == Ge)  { next(); *++e = PSH; expression(Shl); *++e = GE;  ilk = INT; }
+    else if (lexie == Shl) { next(); *++e = PSH; expression(Add); *++e = SHL; ilk = INT; }
+    else if (lexie == Shr) { next(); *++e = PSH; expression(Add); *++e = SHR; ilk = INT; }
     else if (lexie == Add) {
-      next(); *++e = PSH; expr(Mul);
+      next(); *++e = PSH; expression(Mul);
       if ((ilk = t) > PTR) { *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = MUL;  }
       *++e = ADD;
     }
     else if (lexie == Sub) {
-      next(); *++e = PSH; expr(Mul);
+      next(); *++e = PSH; expression(Mul);
       if (t > PTR && t == ilk) { *++e = SUB; *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = DIV; ilk = INT; }
       else if ((ilk = t) > PTR) { *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = MUL; *++e = SUB; }
       else *++e = SUB;
     }
-    else if (lexie == Mul) { next(); *++e = PSH; expr(Inc); *++e = MUL; ilk = INT; }
-    else if (lexie == Div) { next(); *++e = PSH; expr(Inc); *++e = DIV; ilk = INT; }
-    else if (lexie == Mod) { next(); *++e = PSH; expr(Inc); *++e = MOD; ilk = INT; }
+    else if (lexie == Mul) { next(); *++e = PSH; expression(Inc); *++e = MUL; ilk = INT; }
+    else if (lexie == Div) { next(); *++e = PSH; expression(Inc); *++e = DIV; ilk = INT; }
+    else if (lexie == Mod) { next(); *++e = PSH; expression(Inc); *++e = MOD; ilk = INT; }
     else if (lexie == Inc || lexie == Dec) {
       if (*e == LC) { *e = PSH; *++e = LC; }
       else if (*e == LI) { *e = PSH; *++e = LI; }
@@ -288,7 +288,7 @@ void expr(int lev)
       next();
     }
     else if (lexie == Brak) {
-      next(); *++e = PSH; expr(Assign);
+      next(); *++e = PSH; expression(Assign);
       if (lexie == ']') next(); else { printf("%d: close bracket expected\n", line); exit(-1); }
       if (t > PTR) { *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = MUL;  }
       else if (t < PTR) { printf("%d: pointer type expected\n", line); exit(-1); }
@@ -309,7 +309,7 @@ void statement()
   if (lexie == If) {
     next();
     if (lexie == '(') next(); else { printf("%d: open paren expected\n", line); exit(-1); }
-    expr(Assign);
+    expression(Assign);
     if (lexie == ')') next(); else { printf("%d: close paren expected\n", line); exit(-1); }
     *++e = BZ; b = ++e;
     statement();
@@ -324,7 +324,7 @@ void statement()
     next();
     a = e + 1;
     if (lexie == '(') next(); else { printf("%d: open paren expected\n", line); exit(-1); }
-    expr(Assign);
+    expression(Assign);
     if (lexie == ')') next(); else { printf("%d: close paren expected\n", line); exit(-1); }
     *++e = BZ; b = ++e;
     statement();
@@ -333,7 +333,7 @@ void statement()
   }
   else if (lexie == Return) {
     next();
-    if (lexie != ';') expr(Assign);
+    if (lexie != ';') expression(Assign);
     *++e = LEV;
     if (lexie == ';') next(); else { printf("%d: semicolon expected\n", line); exit(-1); }
   }
@@ -346,7 +346,7 @@ void statement()
     next();
   }
   else {
-    expr(Assign);
+    expression(Assign);
     if (lexie == ';') next(); else { printf("%d: semicolon expected\n", line); exit(-1); }
   }
 }
