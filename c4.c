@@ -14,12 +14,18 @@
 #define int long long
 
 char *p, *lp, // current position in source code
-     *data;   // data/bss pointer
+     /**
+      * Pointer to point to data and Basic Service Set (BSS)
+      */
+     *data;
 
 int *e, *le,  // current position in emitted code
-    *id,      // currently parsed identifier
-    /* list of lexemes, also known as symbol table, or list of identifiers */
-    *lexemes,
+    /**
+     * currently parsed identifier
+     */
+    *pin,
+    /* list of occuring lexies, also known as symbol table, or list of identifiers */
+    *lexicon,
     /* current lexie, that is, last string segmented as an atomic lexical chunck of code */
     lexie,
     /* current lexie value, state, or whatever name given to its pat gist */
@@ -49,6 +55,9 @@ enum { CHAR, INT, PTR };
 // identifier offsets (since we can't create an ident struct)
 enum { Tk, Hash, Name, Class, Type, Val, HClass, HType, HVal, Idsz };
 
+/**
+ * Splits the source code into a series of lexies
+ */
 void next()
 {
   char *pp;
@@ -60,6 +69,8 @@ void next()
         printf("%d: %.*s", line, p - lp, lp);
         lp = p;
         while (le < e) {
+          // output the name of an operation, out of its index in an array sting
+          // see aid's "Operation emmission" section for more information
           printf("%8.4s", &"LEA ,IMM ,JMP ,JSR ,BZ  ,BNZ ,ENT ,ADJ ,LEV ,LI  ,LC  ,SI  ,SC  ,PSH ,"
                            "OR  ,XOR ,AND ,EQ  ,NE  ,LT  ,GT  ,LE  ,GE  ,SHL ,SHR ,ADD ,SUB ,MUL ,DIV ,MOD ,"
                            "OPEN,READ,CLOS,PRTF,MALC,FREE,MSET,MCMP,EXIT,"[*++le * 5]);
@@ -76,14 +87,14 @@ void next()
       while ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9') || *p == '_')
         lexie = lexie * 147 + *p++;
       lexie = (lexie << 6) + (p - pp);
-      id = lexemes;
-      while (id[Tk]) {
-        if (lexie == id[Hash] && !memcmp((char *)id[Name], pp, p - pp)) { lexie = id[Tk]; return; }
-        id = id + Idsz;
+      pin = lexemes;
+      while (pin[Tk]) {
+        if (lexie == pin[Hash] && !memcmp((char *)pin[Name], pp, p - pp)) { lexie = pin[Tk]; return; }
+        pin = pin + Idsz;
       }
-      id[Name] = (int)pp;
-      id[Hash] = lexie;
-      lexie = id[Tk] = Id;
+      pin[Name] = (int)pp;
+      pin[Hash] = lexie;
+      lexie = pin[Tk] = Id;
       return;
     }
     else if (lexie >= '0' && lexie <= '9') {
@@ -135,6 +146,9 @@ void next()
   }
 }
 
+/**
+ * Parses expressions
+ */
 void expr(int lev)
 {
   int t, *d;
@@ -155,7 +169,7 @@ void expr(int lev)
     ilk = INT;
   }
   else if (lexie == Id) {
-    d = id; next();
+    d = pin; next();
     if (lexie == '(') {
       next();
       t = 0;
@@ -285,7 +299,10 @@ void expr(int lev)
   }
 }
 
-void stmt()
+/*
+ * Parses statements
+ */
+void statement()
 {
   int *a, *b;
 
@@ -295,11 +312,11 @@ void stmt()
     expr(Assign);
     if (lexie == ')') next(); else { printf("%d: close paren expected\n", line); exit(-1); }
     *++e = BZ; b = ++e;
-    stmt();
+    statement();
     if (lexie == Else) {
       *b = (int)(e + 3); *++e = JMP; b = ++e;
       next();
-      stmt();
+      statement();
     }
     *b = (int)(e + 1);
   }
@@ -310,7 +327,7 @@ void stmt()
     expr(Assign);
     if (lexie == ')') next(); else { printf("%d: close paren expected\n", line); exit(-1); }
     *++e = BZ; b = ++e;
-    stmt();
+    statement();
     *++e = JMP; *++e = (int)a;
     *b = (int)(e + 1);
   }
@@ -322,7 +339,7 @@ void stmt()
   }
   else if (lexie == '{') {
     next();
-    while (lexie != '}') stmt();
+    while (lexie != '}') statement();
     next();
   }
   else if (lexie == ';') {
@@ -334,6 +351,9 @@ void stmt()
   }
 }
 
+/**
+ * Starts the processing of the source, and stirs interpreter VM's execution
+ */
 int main(int argc, char **argv)
 {
   int fd, bt, ilk, poolsz, *idmain;
@@ -359,10 +379,10 @@ int main(int argc, char **argv)
 
   p = "char else enum if int return sizeof while "
       "open read close printf malloc free memset memcmp exit void main";
-  i = Char; while (i <= While) { next(); id[Tk] = i++; } // add keywords to symbol table
-  i = OPEN; while (i <= EXIT) { next(); id[Class] = Sys; id[Type] = INT; id[Val] = i++; } // add library to symbol table
-  next(); id[Tk] = Char; // handle void type
-  next(); idmain = id; // keep track of main
+  i = Char; while (i <= While) { next(); pin[Tk] = i++; } // add keywords to symbol table
+  i = OPEN; while (i <= EXIT) { next(); pin[Class] = Sys; pin[Type] = INT; pin[Val] = i++; } // add library to symbol table
+  next(); pin[Tk] = Char; // handle void type
+  next(); idmain = pin; // keep track of main
 
   if (!(lp = p = malloc(poolsz))) { printf("could not malloc(%d) source area\n", poolsz); return -1; }
   if ((i = read(fd, p, poolsz-1)) <= 0) { printf("read() returned %d\n", i); return -1; }
@@ -391,7 +411,7 @@ int main(int argc, char **argv)
             i = nub;
             next();
           }
-          id[Class] = Num; id[Type] = INT; id[Val] = i++;
+          pin[Class] = Num; pin[Type] = INT; pin[Val] = i++;
           if (lexie == ',') next();
         }
         next();
@@ -401,12 +421,12 @@ int main(int argc, char **argv)
       ilk = bt;
       while (lexie == Mul) { next(); ilk = ilk + PTR; }
       if (lexie != Id) { printf("%d: bad global declaration\n", line); return -1; }
-      if (id[Class]) { printf("%d: duplicate global definition\n", line); return -1; }
+      if (pin[Class]) { printf("%d: duplicate global definition\n", line); return -1; }
       next();
-      id[Type] = ilk;
+      pin[Type] = ilk;
       if (lexie == '(') { // function
-        id[Class] = Fun;
-        id[Val] = (int)(e + 1);
+        pin[Class] = Fun;
+        pin[Val] = (int)(e + 1);
         next(); i = 0;
         while (lexie != ')') {
           ilk = INT;
@@ -414,10 +434,10 @@ int main(int argc, char **argv)
           else if (lexie == Char) { next(); ilk = CHAR; }
           while (lexie == Mul) { next(); ilk = ilk + PTR; }
           if (lexie != Id) { printf("%d: bad parameter declaration\n", line); return -1; }
-          if (id[Class] == Loc) { printf("%d: duplicate parameter definition\n", line); return -1; }
-          id[HClass] = id[Class]; id[Class] = Loc;
-          id[HType]  = id[Type];  id[Type] = ilk;
-          id[HVal]   = id[Val];   id[Val] = i++;
+          if (pin[Class] == Loc) { printf("%d: duplicate parameter definition\n", line); return -1; }
+          pin[HClass] = pin[Class]; pin[Class] = Loc;
+          pin[HType]  = pin[Type];  pin[Type] = ilk;
+          pin[HVal]   = pin[Val];   pin[Val] = i++;
           next();
           if (lexie == ',') next();
         }
@@ -432,31 +452,31 @@ int main(int argc, char **argv)
             ilk = bt;
             while (lexie == Mul) { next(); ilk = ilk + PTR; }
             if (lexie != Id) { printf("%d: bad local declaration\n", line); return -1; }
-            if (id[Class] == Loc) { printf("%d: duplicate local definition\n", line); return -1; }
-            id[HClass] = id[Class]; id[Class] = Loc;
-            id[HType]  = id[Type];  id[Type] = ilk;
-            id[HVal]   = id[Val];   id[Val] = ++i;
+            if (pin[Class] == Loc) { printf("%d: duplicate local definition\n", line); return -1; }
+            pin[HClass] = pin[Class]; pin[Class] = Loc;
+            pin[HType]  = pin[Type];  pin[Type] = ilk;
+            pin[HVal]   = pin[Val];   pin[Val] = ++i;
             next();
             if (lexie == ',') next();
           }
           next();
         }
         *++e = ENT; *++e = i - pad;
-        while (lexie != '}') stmt();
+        while (lexie != '}') statement();
         *++e = LEV;
-        id = lexemes; // unwind symbol table locals
-        while (id[Tk]) {
-          if (id[Class] == Loc) {
-            id[Class] = id[HClass];
-            id[Type] = id[HType];
-            id[Val] = id[HVal];
+        pin = lexemes; // unwind symbol table locals
+        while (pin[Tk]) {
+          if (pin[Class] == Loc) {
+            pin[Class] = pin[HClass];
+            pin[Type] = pin[HType];
+            pin[Val] = pin[HVal];
           }
-          id = id + Idsz;
+          pin = pin + Idsz;
         }
       }
       else {
-        id[Class] = Glo;
-        id[Val] = (int)data;
+        pin[Class] = Glo;
+        pin[Val] = (int)data;
         data = data + sizeof(int);
       }
       if (lexie == ',') next();
