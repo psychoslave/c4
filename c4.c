@@ -87,7 +87,7 @@ void next()
       while ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9') || *p == '_')
         lexie = lexie * 147 + *p++;
       lexie = (lexie << 6) + (p - pp);
-      pin = lexemes;
+      pin = lexicon;
       while (pin[Tk]) {
         if (lexie == pin[Hash] && !memcmp((char *)pin[Name], pp, p - pp)) { lexie = pin[Tk]; return; }
         pin = pin + Idsz;
@@ -368,12 +368,12 @@ int main(int argc, char **argv)
   if ((fd = open(*argv, 0)) < 0) { printf("could not open(%s)\n", *argv); return -1; }
 
   poolsz = 256*1024; // arbitrary size
-  if (!(lexemes = malloc(poolsz))) { printf("could not malloc(%d) symbol area\n", poolsz); return -1; }
+  if (!(lexicon = malloc(poolsz))) { printf("could not malloc(%d) symbol area\n", poolsz); return -1; }
   if (!(le = e = malloc(poolsz))) { printf("could not malloc(%d) text area\n", poolsz); return -1; }
   if (!(data = malloc(poolsz))) { printf("could not malloc(%d) data area\n", poolsz); return -1; }
   if (!(sp = malloc(poolsz))) { printf("could not malloc(%d) stack area\n", poolsz); return -1; }
 
-  memset(lexemes,  0, poolsz);
+  memset(lexicon,  0, poolsz);
   memset(e,    0, poolsz);
   memset(data, 0, poolsz);
 
@@ -464,7 +464,7 @@ int main(int argc, char **argv)
         *++e = ENT; *++e = i - pad;
         while (lexie != '}') statement();
         *++e = LEV;
-        pin = lexemes; // unwind symbol table locals
+        pin = lexicon; // unwind symbol table locals
         while (pin[Tk]) {
           if (pin[Class] == Loc) {
             pin[Class] = pin[HClass];
