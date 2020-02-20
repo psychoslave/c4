@@ -14,23 +14,19 @@
 #define int long long
 
 char *p, *lp, // current position in source code
-     /**
-      * Pointer to point to data and Basic Service Set (BSS)
-      */
+      // Pointer to point to data and Basic Service Set (BSS)
      *data;
 
 int *e, *le,  // current position in emitted code
-    /**
-     * currently parsed identifier
-     */
+     // currently parsed identifier
     *pin,
-    /* list of occuring lexies, also known as symbol table, or list of identifiers */
+    // list of occuring lexies, also known as symbol table, or list of identifiers
     *lexicon,
-    /* current lexie, that is, last string segmented as an atomic lexical chunck of code */
+    // current lexie, that is, last string segmented as an atomic lexical chunck of code
     lexie,
-    /* current lexie value, state, or whatever name given to its pat gist */
+    // current lexie value, state, or whatever name given to its pat gist
     nub,
-    /* type of the current expression */
+    // type of the current expression
     ilk,
     pad,      // local variable offset
     line,     // current line number
@@ -55,9 +51,7 @@ enum { CHAR, INT, PTR };
 // identifier offsets (since we can't create an ident struct)
 enum { Tk, Hash, Name, Class, Type, Val, HClass, HType, HVal, Idsz };
 
-/**
- * Splits the source code into a series of lexies
- */
+// Splits the source code into a series of lexies
 void next()
 {
   char *pp;
@@ -146,9 +140,7 @@ void next()
   }
 }
 
-/**
- * Parses expressions
- */
+// Parses expressions
 void expression(int lev)
 {
   int t, *d;
@@ -299,9 +291,7 @@ void expression(int lev)
   }
 }
 
-/*
- * Parses statements
- */
+// Parses statements
 void statement()
 {
   int *a, *b;
@@ -351,9 +341,7 @@ void statement()
   }
 }
 
-/**
- * Starts the processing of the source, and stirs interpreter VM's execution
- */
+// Starts the processing of the source, and stirs interpreter VM's execution
 int main(int argc, char **argv)
 {
   int fd, bt, ilk, poolsz, *idmain;
